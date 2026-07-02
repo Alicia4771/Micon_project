@@ -1,0 +1,19 @@
+# ---- Unity ----
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Mm]emoryCaptures/
+UserSettings/
+Recordings/
+*.stackdump
+
+# Rider / VS / VSCode / IDE
+.vs/
+.idea/
+.vscode/
+
+# OS
+.DS_Store
