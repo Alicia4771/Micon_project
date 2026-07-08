@@ -7,7 +7,7 @@ public class KeyboardController : MonoBehaviour
 
     private float rotate_speed_x = 20f;
     private float rotate_speed_y = 20f;
-    private float rotate_speed_z = 20f;
+    private float rotate_speed_z = 35f;
 
 
     void Update()
@@ -21,7 +21,7 @@ public class KeyboardController : MonoBehaviour
         if (Keyboard.current.dKey.isPressed)
         {
             rotation.y += 1f * rotate_speed_y; // Y軸+
-            Debug.Log("dKey is pressed");
+            // Debug.Log("dKey is pressed");
         }
 
         if (Keyboard.current.aKey.isPressed)

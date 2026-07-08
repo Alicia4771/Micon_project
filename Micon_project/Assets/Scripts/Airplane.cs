@@ -60,6 +60,14 @@ public class Airplane : MonoBehaviour
         MoveMyPosition();
     }
 
+    private void OnTriggerEnter(Collider other)
+    {
+        if (other.CompareTag("Obstacle"))
+        {
+            Debug.Log("岩に衝突");
+        }
+    }
+
     private void SetMyRotation()
     {
         Vector3 rotation = this.transform.rotation.eulerAngles;
