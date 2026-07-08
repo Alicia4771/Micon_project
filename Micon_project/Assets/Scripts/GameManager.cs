@@ -1,9 +1,14 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
+using TMPro;
 
 public class GameManager : MonoBehaviour
 {
     [Header("Stone Prefabs")]
     [SerializeField] private GameObject[] stonePrefabs;
+
+    [Header("Score UI")]
+    [SerializeField] private TextMeshProUGUI scoreText;
 
     [Header("Spawn Timing")]
     [SerializeField] private float spawn_timing_early = 6f;
@@ -11,7 +16,6 @@ public class GameManager : MonoBehaviour
     [SerializeField] private float spawn_timing_update = 30f;
     [SerializeField] private float spawn_timing_short_ratio = 0.85f;
 
-    // [Header("Spawn Range")]
     private float spawn_range_x_min = -24f;
     private float spawn_range_x_max = 24f;
 
@@ -20,7 +24,6 @@ public class GameManager : MonoBehaviour
 
     private float spawn_range_z_min = 200f;
     private float spawn_range_z_max = 250f;
-
 
     private float time_count = 0f;
 
@@ -31,37 +34,46 @@ public class GameManager : MonoBehaviour
     {
         time_count = 0f;
 
+        DataManager.Initialize();
+
         SpawnStone();
         ScheduleNextSpawn();
 
         next_timing_update_time = spawn_timing_update;
+
+        UpdateScoreText();
     }
 
     private void Update()
     {
         time_count += Time.deltaTime;
 
-        // 一定時間ごとにスポーン間隔を短くする
         if (time_count >= next_timing_update_time)
         {
             ShortenSpawnTiming();
-
             next_timing_update_time += spawn_timing_update;
         }
 
-        // 岩を生成する
         if (time_count >= next_spawn_time)
         {
             SpawnStone();
-
             ScheduleNextSpawn();
         }
+
+        DataManager.AddScore(1);
+        UpdateScoreText();
+    }
+
+    private void UpdateScoreText()
+    {
+        if (scoreText == null) return;
+
+        scoreText.text = "" + DataManager.GetScore();
     }
 
     private void ScheduleNextSpawn()
     {
         float randomTiming = Random.Range(spawn_timing_early, spawn_timing_late);
-
         next_spawn_time = time_count + randomTiming;
     }
 
@@ -99,5 +111,10 @@ public class GameManager : MonoBehaviour
         Instantiate(selectedStone, spawnPosition, Quaternion.identity);
 
         return true;
+    }
+
+    public void FinishGame()
+    {
+        SceneManager.LoadScene("ResultScene");
     }
 }

@@ -3,6 +3,8 @@ using UnityEngine.UI;
 
 public class AirplaneHpSlider : MonoBehaviour
 {
+    [SerializeField] private GameManager gameManager;
+    
     [Header("UI")]
     [SerializeField] private Slider hpSlider;
     [SerializeField] private Image fillImage;
@@ -69,6 +71,8 @@ public class AirplaneHpSlider : MonoBehaviour
         if (hp_now < hp_min)
         {
             hp_now = hp_min;
+
+            gameManager.FinishGame();
         }
 
         UpdateHpUI();
