@@ -53,6 +53,7 @@
     <Compile Include="Assets/Scripts/SensorReceiver.cs" />
     <Compile Include="Assets/Scripts/DataManager.cs" />
     <Compile Include="Assets/Scripts/KeyboardController.cs" />
+    <Compile Include="Assets/Scripts/AirplaneParts/Propeller.cs" />
     <Compile Include="Assets/TutorialInfo/Scripts/Readme.cs" />
     <Compile Include="Assets/Scripts/CameraInitialPositionSet.cs" />
     <Compile Include="Assets/Scripts/GameManagre.cs" />
