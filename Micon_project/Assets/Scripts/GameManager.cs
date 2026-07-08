@@ -12,17 +12,15 @@ public class GameManager : MonoBehaviour
     [SerializeField] private float spawn_timing_short_ratio = 0.85f;
 
     // [Header("Spawn Range")]
-    private float spawn_range_x_min = -15f;
-    private float spawn_range_x_max = 15f;
+    private float spawn_range_x_min = -24f;
+    private float spawn_range_x_max = 24f;
 
-    private float spawn_range_y_min = 2f;
+    private float spawn_range_y_min = 0f;
     private float spawn_range_y_max = 20f;
 
     private float spawn_range_z_min = 200f;
     private float spawn_range_z_max = 250f;
 
-    [Header("UI")]
-    [SerializeField] private AirplaneHpSlider airplaneHpSlider;
 
     private float time_count = 0f;
 

@@ -19,6 +19,8 @@ public class Airplane : MonoBehaviour
     private float rotation_y_move_threshold = 1f;
     private float rotation_z_move_threshold = 1f;
 
+    [SerializeField] private AirplaneHpSlider airplaneHpSlider;
+
     void Start()
     {
         rotation_x = 0f;
@@ -62,10 +64,32 @@ public class Airplane : MonoBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
-        if (other.CompareTag("Obstacle"))
+        Debug.Log("Triggerに入りました: " + other.gameObject.name);
+
+        Stone stone = other.GetComponent<Stone>();
+
+        if (stone == null)
         {
-            Debug.Log("岩に衝突");
+            stone = other.GetComponentInParent<Stone>();
         }
+
+        if (stone == null)
+        {
+            return;
+        }
+
+        // Debug.Log("岩に衝突");
+
+        int damage = stone.GetDamage();
+
+        if (airplaneHpSlider != null)
+        {
+            airplaneHpSlider.Damage(damage);
+        }
+
+        // Debug.Log("ダメージ: " + damage);
+
+        Destroy(stone.gameObject);
     }
 
     private void SetMyRotation()
