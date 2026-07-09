@@ -68,8 +68,10 @@
     <Compile Include="Assets/Scripts/SensorReceiver.cs" />
     <Compile Include="Assets/FlyingSystem/Demo_Main/Scripts/Events/RollLeft.cs" />
     <Compile Include="Assets/Scripts/DataManager.cs" />
+    <Compile Include="Assets/Scripts/StartScene/AirPlaneChoosePanelManager.cs" />
     <Compile Include="Assets/FlyingSystem/Demo_Main/Scripts/Events/RollRight.cs" />
     <Compile Include="Assets/FlyingSystem/GliderFlyingSystem/Demo/Scripts/GliderController.cs" />
+    <Compile Include="Assets/Scripts/StartScene/StartSceneCamera.cs" />
     <Compile Include="Assets/PyroParticles/Demo/DemoScript.cs" />
     <Compile Include="Assets/Scripts/KeyboardController.cs" />
     <Compile Include="Assets/FlyingSystem/GliderFlyingSystem/GliderFlyingSystem.cs" />

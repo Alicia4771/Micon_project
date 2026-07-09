@@ -7,6 +7,9 @@ EditorBuildSettings:
   m_Scenes:
   - enabled: 1
     path: Assets/Scenes/StartScene.unity
+    guid: 99d0178aa2a3f42b4b898cf47704d0f2
+  - enabled: 1
+    path: Assets/Scenes/AirplaneChooseScene.unity
     guid: 8e2e76d52dac345cc94ea10aff40d756
   - enabled: 1
     path: Assets/Scenes/MainScene.unity
