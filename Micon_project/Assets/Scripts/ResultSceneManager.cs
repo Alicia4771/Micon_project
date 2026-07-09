@@ -9,6 +9,8 @@ public class ResultSceneManager : MonoBehaviour
 
     private float time_count = 0;
     [SerializeField] private TextMeshProUGUI scoreText;
+    [SerializeField] private Propeller propeller_L;
+    [SerializeField] private Propeller propeller_R;
 
     void Start()
     {
@@ -19,6 +21,9 @@ public class ResultSceneManager : MonoBehaviour
         }
 
         time_count = 0;
+
+        propeller_L.SetRotationSpeed(120f);
+        propeller_R.SetRotationSpeed(50f);
     }
 
     

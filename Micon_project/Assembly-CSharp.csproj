@@ -49,17 +49,26 @@
     <Analyzer Include="/Applications/Unity/Hub/Editor/6000.3.6f1/Unity.app/Contents/Resources/BuildPipeline/Unity.SourceGenerators/Unity.UIToolkit.SourceGenerator.dll" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Assets/PyroParticles/Prefab/Script/MeteorSwarmScript.cs" />
     <Compile Include="Assets/Scripts/Airplane.cs" />
     <Compile Include="Assets/Scripts/Stone.cs" />
+    <Compile Include="Assets/PyroParticles/Prefab/Script/FireBaseScript.cs" />
+    <Compile Include="Assets/PyroParticles/Prefab/Script/SingleLineAttribute.cs" />
     <Compile Include="Assets/Scripts/SensorReceiver.cs" />
     <Compile Include="Assets/Scripts/DataManager.cs" />
+    <Compile Include="Assets/PyroParticles/Demo/DemoScript.cs" />
     <Compile Include="Assets/Scripts/KeyboardController.cs" />
+    <Compile Include="Assets/PyroParticles/Demo/DemoScriptEditor.cs" />
     <Compile Include="Assets/Scripts/AirplaneHpSlider.cs" />
+    <Compile Include="Assets/PyroParticles/Prefab/Script/FireCollisionForwardScript.cs" />
+    <Compile Include="Assets/PyroParticles/Prefab/Script/FireLightScript.cs" />
     <Compile Include="Assets/Scripts/AirplaneParts/Propeller.cs" />
     <Compile Include="Assets/TutorialInfo/Scripts/Readme.cs" />
+    <Compile Include="Assets/PyroParticles/Prefab/Script/FireConstantBaseScript.cs" />
     <Compile Include="Assets/Scripts/CameraInitialPositionSet.cs" />
     <Compile Include="Assets/Scripts/ResultSceneManager.cs" />
     <Compile Include="Assets/Scripts/GameManager.cs" />
+    <Compile Include="Assets/PyroParticles/Prefab/Script/FireProjectileScript.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Assets/TextMesh Pro/Shaders/TMPro.cginc" />
@@ -69,6 +78,7 @@
     <None Include="Assets/TextMesh Pro/Shaders/TMP_Bitmap.shader" />
     <None Include="Assets/TextMesh Pro/Shaders/TMPro_Mobile.cginc" />
     <None Include="Assets/TextMesh Pro/Shaders/TMP_SDF SSD.shader" />
+    <None Include="Assets/PyroParticles/Prefab/Materials/AdditiveTintable.shader" />
     <None Include="Assets/TextMesh Pro/Shaders/TMP_SDF-Surface-Mobile.shader" />
     <None Include="Assets/TextMesh Pro/Shaders/SDFFunctions.hlsl" />
     <None Include="Assets/TextMesh Pro/Shaders/TMP_SDF-Surface.shader" />
@@ -77,6 +87,7 @@
     <None Include="Assets/TextMesh Pro/Shaders/TMP_SDF.shader" />
     <None Include="Assets/TextMesh Pro/Shaders/TMP_SDF-Mobile SSD.shader" />
     <None Include="Assets/TextMesh Pro/Resources/LineBreaking Leading Characters.txt" />
+    <None Include="Assets/PyroParticles/Readme.txt" />
     <None Include="Assets/TextMesh Pro/Shaders/TMPro_Properties.cginc" />
     <None Include="Assets/TextMesh Pro/Shaders/TMPro_Surface.cginc" />
     <None Include="Assets/TextMesh Pro/Resources/LineBreaking Following Characters.txt" />
