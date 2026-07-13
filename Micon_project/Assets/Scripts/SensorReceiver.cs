@@ -114,16 +114,42 @@ public class SensorReceiver : MonoBehaviour
     }
 
     /// <summary>
-    /// 5つのint型データをCSV形式でArduinoへ送信する
+    /// 20個の0または1をCSV形式でArduinoへ送信する
     /// </summary>
-    public bool SendCsvData(
-        int a,
-        int b,
-        int c,
-        int d,
-        int e)
+    /// <param name="values">
+    /// 0または1が入った、長さ20の配列
+    /// </param>
+    public bool SendCsvData(int[] values)
     {
-        string csvData = $"{a},{b},{c},{d},{e}";
+        if (values == null)
+        {
+            Debug.LogWarning("送信する配列がnullです。");
+            return false;
+        }
+
+        if (values.Length != 20)
+        {
+            Debug.LogWarning(
+                $"送信データは20個必要です。現在は{values.Length}個です。"
+            );
+
+            return false;
+        }
+
+        for (int i = 0; i < values.Length; i++)
+        {
+            if (values[i] != 0 && values[i] != 1)
+            {
+                Debug.LogWarning(
+                    $"values[{i}]に0または1以外の値が入っています：" +
+                    values[i]
+                );
+
+                return false;
+            }
+        }
+
+        string csvData = string.Join(",", values);
 
         return SendToArduino(csvData);
     }
