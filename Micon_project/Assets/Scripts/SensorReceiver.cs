@@ -114,16 +114,16 @@ public class SensorReceiver : MonoBehaviour
     }
 
     /// <summary>
-    /// 5つのstring型データをCSV形式でArduinoへ送信する
+    /// 5つのint型データをCSV形式でArduinoへ送信する
     /// </summary>
     public bool SendCsvData(
-        string a,
-        string b,
-        string c,
-        string d,
-        string e)
+        int a,
+        int b,
+        int c,
+        int d,
+        int e)
     {
-        string csvData = string.Join(",", a, b, c, d, e);
+        string csvData = $"{a},{b},{c},{d},{e}";
 
         return SendToArduino(csvData);
     }
