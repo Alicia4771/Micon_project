@@ -5,6 +5,7 @@ using TMPro;
 public class GameManager : MonoBehaviour
 {
     [SerializeField] private SensorReceiver sensorReceiver;
+    [SerializeField] private radar radar;
     
     [Header("Stone Prefabs")]
     [SerializeField] private GameObject[] stonePrefabs;
@@ -65,6 +66,9 @@ public class GameManager : MonoBehaviour
         DataManager.SetSensorValue(sensorReceiver.GetSensorData());
 
         DataManager.AddScore(1);
+
+        sensorReceiver.SendToArduino(radar.GetRadarData());
+
         UpdateScoreText();
     }
 

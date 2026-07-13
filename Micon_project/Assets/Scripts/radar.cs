@@ -218,17 +218,25 @@ public class radar : MonoBehaviour
     }
 
     /// <summary>
-    /// 最新の16×16レーダー配列を返す
+    /// 最新のレーダーデータを
+    /// 0,0,1,0,... のCSV形式で返す
     /// </summary>
-    public int[,] GetRadarData()
+    public string GetRadarData()
     {
-        // 呼び出されたタイミングで最新状態に更新する
         UpdateRadarData();
 
-        /*
-         * 元の配列を外部から変更されないように、
-         * コピーした配列を返す。
-         */
-        return (int[,])radarData.Clone();
+        int[] result = new int[MatrixSize * MatrixSize];
+
+        for (int row = 0; row < MatrixSize; row++)
+        {
+            for (int column = 0; column < MatrixSize; column++)
+            {
+                int index = row * MatrixSize + column;
+
+                result[index] = radarData[row, column];
+            }
+        }
+
+        return string.Join(",", result);
     }
 }
