@@ -9,12 +9,16 @@ public static class DataManager
 
     private static int score = 0;
 
+    private static List<string> obstacle_list = new();
+
 
     public static void Initialize()
     {
         acceleration_sensor_value = Vector3.zero;
         gyro_sensor_value = Vector3.zero;
         euler_sensor_value = Vector3.zero;
+
+        obstacle_list.Clear();
         
         score = 0;
     }

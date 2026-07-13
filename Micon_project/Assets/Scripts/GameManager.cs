@@ -18,8 +18,8 @@ public class GameManager : MonoBehaviour
     [SerializeField] private float spawn_timing_update = 30f;
     [SerializeField] private float spawn_timing_short_ratio = 0.85f;
 
-    private float spawn_range_x_min = -24f;
-    private float spawn_range_x_max = 24f;
+    private float spawn_range_x_min = -26f;
+    private float spawn_range_x_max = 26f;
 
     private float spawn_range_y_min = 0f;
     private float spawn_range_y_max = 20f;
