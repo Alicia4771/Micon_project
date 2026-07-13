@@ -12,10 +12,83 @@ public static class DataManager
 
     public static void Initialize()
     {
+        acceleration_sensor_value = Vector3.zero;
+        gyro_sensor_value = Vector3.zero;
+        euler_sensor_value = Vector3.zero;
+        
         score = 0;
     }
 
 
+
+
+
+
+
+    /// <summary>
+    /// センサー値を設定する
+    /// </summary>
+    /// <param name="sensor_raw_data">string センサの生データ</param>
+    /// <returns></returns>
+    public static bool SetSensorValue(string sensor_raw_data)
+    {
+        string[] sensor_values = sensor_raw_data.Split(',');
+
+        if (sensor_values.Length != 9)
+        {
+            Debug.LogError("Invalid sensor data length: " + sensor_values.Length);
+            return false;
+        }
+
+        try
+        {
+            acceleration_sensor_value.x = float.Parse(sensor_values[0]);
+            acceleration_sensor_value.y = float.Parse(sensor_values[1]);
+            acceleration_sensor_value.z = float.Parse(sensor_values[2]);
+
+            gyro_sensor_value.x = float.Parse(sensor_values[3]);
+            gyro_sensor_value.y = float.Parse(sensor_values[4]);
+            gyro_sensor_value.z = float.Parse(sensor_values[5]);
+
+            euler_sensor_value.x = float.Parse(sensor_values[6]);
+            euler_sensor_value.y = float.Parse(sensor_values[7]);
+            euler_sensor_value.z = float.Parse(sensor_values[8]);
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError("Failed to parse sensor data: " + e.Message);
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// 加速度センサー値を取得する
+    /// </summary>
+    /// <returns></returns>
+    public static Vector3 GetAccelerationSensorValue()
+    {
+        return acceleration_sensor_value;
+    }
+
+    /// <summary>
+    /// ジャイロセンサー値を取得する
+    /// </summary>
+    /// <returns></returns>
+    public static Vector3 GetGyroSensorValue()
+    {
+        return gyro_sensor_value;
+    }
+
+    /// <summary>
+    /// オイラー角センサー値を取得する
+    /// </summary>
+    /// <returns></returns>
+    public static Vector3 GetEulerSensorValue()
+    {
+        return euler_sensor_value;
+    }
 
     /// <summary>
     /// 加算するスコアの値を設定する

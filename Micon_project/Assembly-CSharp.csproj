@@ -93,6 +93,7 @@
     <Compile Include="Assets/PyroParticles/Prefab/Script/FireConstantBaseScript.cs" />
     <Compile Include="Assets/Scripts/CameraInitialPositionSet.cs" />
     <Compile Include="Assets/Scripts/ResultSceneManager.cs" />
+    <Compile Include="Assets/Scripts/radar.cs" />
     <Compile Include="Assets/Scripts/GameManager.cs" />
     <Compile Include="Assets/FlyingSystem/HelicopterFlyingSystem/Demo/Scripts/DroneController.cs" />
     <Compile Include="Assets/PyroParticles/Prefab/Script/FireProjectileScript.cs" />

@@ -4,6 +4,8 @@ using TMPro;
 
 public class GameManager : MonoBehaviour
 {
+    [SerializeField] private SensorReceiver sensorReceiver;
+    
     [Header("Stone Prefabs")]
     [SerializeField] private GameObject[] stonePrefabs;
 
@@ -59,6 +61,8 @@ public class GameManager : MonoBehaviour
             SpawnStone();
             ScheduleNextSpawn();
         }
+
+        DataManager.SetSensorValue(sensorReceiver.GetSensorData());
 
         DataManager.AddScore(1);
         UpdateScoreText();
