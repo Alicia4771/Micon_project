@@ -6,6 +6,7 @@ TagManager:
   tags:
   - Obstacle
   - Fire
+  - Stone
   layers:
   - Default
   - TransparentFX

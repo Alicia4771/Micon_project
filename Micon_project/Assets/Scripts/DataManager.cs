@@ -7,6 +7,8 @@ public static class DataManager
     private static Vector3 gyro_sensor_value;
     private static Vector3 euler_sensor_value;
 
+    private static bool has_received_sensor_data = false;
+
     private static int score = 0;
 
     private static List<string> obstacle_list = new();
@@ -17,6 +19,8 @@ public static class DataManager
         acceleration_sensor_value = Vector3.zero;
         gyro_sensor_value = Vector3.zero;
         euler_sensor_value = Vector3.zero;
+
+        has_received_sensor_data = false;
 
         obstacle_list.Clear();
         
@@ -64,6 +68,7 @@ public static class DataManager
             return false;
         }
 
+        has_received_sensor_data = true;
         return true;
     }
 
@@ -92,6 +97,14 @@ public static class DataManager
     public static Vector3 GetEulerSensorValue()
     {
         return euler_sensor_value;
+    }
+
+    /// <summary>
+    /// センサデータを1回以上正常に受信したか
+    /// </summary>
+    public static bool HasReceivedSensorData()
+    {
+        return has_received_sensor_data;
     }
 
     /// <summary>

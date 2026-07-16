@@ -73,6 +73,7 @@
     <Compile Include="Assets/FlyingSystem/GliderFlyingSystem/Demo/Scripts/GliderController.cs" />
     <Compile Include="Assets/Scripts/StartScene/StartSceneCamera.cs" />
     <Compile Include="Assets/PyroParticles/Demo/DemoScript.cs" />
+    <Compile Include="Assets/Scripts/ControlFromSensor.cs" />
     <Compile Include="Assets/Scripts/KeyboardController.cs" />
     <Compile Include="Assets/FlyingSystem/GliderFlyingSystem/GliderFlyingSystem.cs" />
     <Compile Include="Assets/FlyingSystem/HelicopterFlyingSystem/Demo/Scripts/HelicopterController.cs" />

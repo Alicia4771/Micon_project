@@ -218,25 +218,36 @@ public class radar : MonoBehaviour
     }
 
     /// <summary>
-    /// 最新のレーダーデータを
-    /// 0,0,1,0,... のCSV形式で返す
+    /// 16×16＝256個のレーダーデータを、
+    /// 8個の32ビット整数に圧縮して返す
     /// </summary>
-    public string GetRadarData()
+    public uint[] GetRadarData()
     {
         UpdateRadarData();
 
-        int[] result = new int[MatrixSize * MatrixSize];
+        // 32ビット × 8個 = 256ビット
+        uint[] packedData = new uint[8];
 
         for (int row = 0; row < MatrixSize; row++)
         {
             for (int column = 0; column < MatrixSize; column++)
             {
+                // 0～255の通し番号
                 int index = row * MatrixSize + column;
 
-                result[index] = radarData[row, column];
+                // 何番目のuintに格納するか
+                int uintIndex = index / 32;
+
+                // uint内の何ビット目に格納するか
+                int bitIndex = index % 32;
+
+                if (radarData[row, column] == 1)
+                {
+                    packedData[uintIndex] |= 1u << bitIndex;
+                }
             }
         }
 
-        return string.Join(",", result);
+        return packedData;
     }
 }

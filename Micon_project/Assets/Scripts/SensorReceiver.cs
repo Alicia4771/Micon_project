@@ -6,7 +6,7 @@ public class SensorReceiver : MonoBehaviour
 {
     [Header("Serial Settings")]
     [SerializeField]
-    private string portName = "/dev/cu.usbserial-120";
+    private string portName = "/dev/cu.usbserial-***";
 
     [SerializeField]
     private int baudRate = 115200;
