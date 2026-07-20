@@ -5,8 +5,8 @@ using System.Threading;
 public class SensorReceiver : MonoBehaviour
 {
     [Header("Serial Settings")]
-    [SerializeField]
-    private string portName = "/dev/cu.usbserial-***";
+    // [SerializeField]
+    private string portName = "/dev/cu.usbserial-AQ01LGU4";
 
     [SerializeField]
     private int baudRate = 115200;

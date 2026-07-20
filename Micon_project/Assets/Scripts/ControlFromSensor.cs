@@ -1,13 +1,15 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 [DisallowMultipleComponent]
 public class ControlFromSensor : MonoBehaviour
 {
     [Header("Control Mode")]
     [SerializeField, Tooltip("現在は3のみ使用します")]
-    private int control_mode = 3;       // 1: ジャイロセンサのみ
-                                        // 2: ジャイロ＋加速度センサの融合（センサフュージョン）
-                                        // 3: ９軸ジャイロセンサ
+    private int control_mode = 3;
+    // 1: ジャイロセンサのみ
+    // 2: ジャイロ＋加速度センサの融合
+    // 3: 9軸ジャイロセンサのオイラー角
 
     [Header("Pitch Settings")]
     [SerializeField, Tooltip("飛行機が前後に傾く最大角度")]
@@ -35,18 +37,18 @@ public class ControlFromSensor : MonoBehaviour
 
     [Header("Calibration")]
     [SerializeField, Tooltip("このキーを押したときのセンサ角度を水平として設定する")]
-    private KeyCode calibration_key = KeyCode.C;
+    private Key calibration_key = Key.C;
 
     private Rigidbody airplane_rigidbody;
 
-    // 飛行機の初期姿勢
+    // 飛行機のゲーム開始時の姿勢
     private Quaternion initial_airplane_rotation;
 
     // センサを水平とみなす基準角度
     private float base_roll;
     private float base_pitch;
 
-    private bool is_calibrated;
+    private bool is_calibrated = false;
 
     // Rigidbodyへ適用する目標姿勢
     private Quaternion target_rotation;
@@ -78,20 +80,26 @@ public class ControlFromSensor : MonoBehaviour
 
     private void Update()
     {
-        // 今はモード3だけを実装する
+        // 今は制御モード3だけを使用する
         if (control_mode != 3)
         {
             return;
         }
 
-        // センサ値をまだ受け取っていない
+        // センサ値をまだ正常に受信していない
         if (!DataManager.HasReceivedSensorData())
         {
             return;
         }
 
-        // Cキーで現在の持ち方を水平として再設定する
-        if (Input.GetKeyDown(calibration_key))
+        /*
+         * 新しいInput Systemでキー入力を取得する。
+         *
+         * Keyboard.currentがnullになる可能性もあるため、
+         * nullチェックを行う。
+         */
+        if (Keyboard.current != null &&
+            Keyboard.current[calibration_key].wasPressedThisFrame)
         {
             CalibrateSensor();
         }
@@ -99,7 +107,10 @@ public class ControlFromSensor : MonoBehaviour
         Vector3 euler_sensor_value =
             DataManager.GetEulerSensorValue();
 
-        // 最初に正常な値を取得したときに自動調整する
+        /*
+         * 最初にセンサ値を正常に取得したとき、
+         * その姿勢を水平状態として自動的に記録する。
+         */
         if (!is_calibrated)
         {
             CalibrateSensor();
@@ -107,7 +118,7 @@ public class ControlFromSensor : MonoBehaviour
         }
 
         /*
-         * DataManager上では、次の割り当てを想定しています。
+         * DataManagerでは次の割り当てを想定する。
          *
          * X = Heading / Yaw
          * Y = Roll
@@ -136,7 +147,7 @@ public class ControlFromSensor : MonoBehaviour
             sensor_pitch *= -1f;
         }
 
-        // 飛行機が傾きすぎないように制限する
+        // 飛行機が傾きすぎないように角度を制限する
         float airplane_roll = Mathf.Clamp(
             sensor_roll,
             -max_roll_angle,
@@ -150,10 +161,9 @@ public class ControlFromSensor : MonoBehaviour
         );
 
         /*
-         * 初期姿勢を基準にして、
-         * X軸をPitch、Z軸をRollとして傾ける。
-         *
-         * Yawは今回は操作しない。
+         * X軸：Pitch
+         * Y軸：今回は回転させない
+         * Z軸：Roll
          */
         Quaternion sensor_rotation = Quaternion.Euler(
             airplane_pitch,
@@ -172,6 +182,9 @@ public class ControlFromSensor : MonoBehaviour
             return;
         }
 
+        /*
+         * フレームレートに依存しにくい補間率を計算する。
+         */
         float smooth_ratio =
             1f - Mathf.Exp(
                 -rotation_smooth_speed *
@@ -184,7 +197,9 @@ public class ControlFromSensor : MonoBehaviour
             smooth_ratio
         );
 
-        airplane_rigidbody.MoveRotation(next_rotation);
+        airplane_rigidbody.MoveRotation(
+            next_rotation
+        );
     }
 
     /// <summary>
@@ -194,6 +209,10 @@ public class ControlFromSensor : MonoBehaviour
     {
         if (!DataManager.HasReceivedSensorData())
         {
+            Debug.LogWarning(
+                "センサ値をまだ受信していないため、調整できません。"
+            );
+
             return;
         }
 
@@ -206,7 +225,34 @@ public class ControlFromSensor : MonoBehaviour
         is_calibrated = true;
 
         Debug.Log(
-            $"センサを調整しました。Roll={base_roll}, Pitch={base_pitch}"
+            $"センサを調整しました。" +
+            $" Roll={base_roll}, Pitch={base_pitch}"
         );
+    }
+
+    /// <summary>
+    /// 制御モードを設定する
+    /// </summary>
+    public bool SetControlMode(int mode)
+    {
+        if (mode < 1 || mode > 3)
+        {
+            Debug.LogWarning(
+                "ControlFromSensor: " +
+                "無効な制御モードです。" +
+                "1～3の範囲で指定してください。"
+            );
+
+            return false;
+        }
+
+        control_mode = mode;
+
+        Debug.Log(
+            $"ControlFromSensor: " +
+            $"制御モードを{control_mode}に設定しました。"
+        );
+
+        return true;
     }
 }
