@@ -199,61 +199,119 @@ public class radar : MonoBehaviour
                 );
 
             /*
-             * 飛行機の近くを上下方向に通る障害物だけ、
-             * 上側・下側LEDの対象にする。
-             */
+            * 飛行機の近くを上下方向に通る障害物だけ、
+            * 上側・下側LEDの対象にする。
+            */
             float horizontalDistance =
                 new Vector2(
                     difference3D.x,
                     difference3D.z
                 ).magnitude;
 
-            if (horizontalDistance <=
-                safeVerticalHorizontalRange)
+            if (horizontalDistance <= safeVerticalHorizontalRange)
             {
-                float verticalDifference =
-                    difference3D.y;
+                Collider obstacleCollider =
+                    obstacle.GetComponentInChildren<Collider>();
 
-                if (verticalDifference > 0f)
+                float obstacleTopY =
+                    obstacle.transform.position.y;
+
+                float obstacleBottomY =
+                    obstacle.transform.position.y;
+
+                /*
+                * Colliderがある場合は、
+                * 障害物の中心ではなく上端・下端を使う。
+                */
+                if (obstacleCollider != null)
                 {
-                    // 飛行機より上にある障害物
-                    int value =
+                    obstacleTopY =
+                        obstacleCollider.bounds.max.y;
+
+                    obstacleBottomY =
+                        obstacleCollider.bounds.min.y;
+                }
+
+                float airplaneY =
+                    airplane.position.y;
+
+
+                //==================================================
+                // 上側を独立して判定
+                //==================================================
+
+                /*
+                * 障害物の上端が飛行機より上にある場合は、
+                * 上側に障害物が存在する。
+                */
+                if (obstacleTopY > airplaneY)
+                {
+                    /*
+                    * 障害物全体が上にある場合：
+                    * 飛行機から障害物の下端までの距離。
+                    *
+                    * 障害物が飛行機の高さまで重なっている場合：
+                    * 距離を0として最大値255にする。
+                    */
+                    float upperDistance =
+                        Mathf.Max(
+                            0f,
+                            obstacleBottomY - airplaneY
+                        );
+
+                    int upperValue =
                         DistanceToBrightness(
-                            verticalDifference,
+                            upperDistance,
                             safeVerticalRange
                         );
 
                     upperApproachValue =
                         Mathf.Max(
                             upperApproachValue,
-                            value
+                            upperValue
                         );
                 }
-                else if (verticalDifference < 0f)
+
+
+                //==================================================
+                // 下側を独立して判定
+                //==================================================
+
+                /*
+                * 障害物の下端が飛行機より下にある場合は、
+                * 下側に障害物が存在する。
+                */
+                if (obstacleBottomY < airplaneY)
                 {
-                    // 飛行機より下にある障害物
-                    int value =
+                    /*
+                    * 障害物全体が下にある場合：
+                    * 障害物の上端から飛行機までの距離。
+                    *
+                    * 障害物が飛行機の高さまで重なっている場合：
+                    * 距離を0として最大値255にする。
+                    */
+                    float lowerDistance =
+                        Mathf.Max(
+                            0f,
+                            airplaneY - obstacleTopY
+                        );
+
+                    int lowerValue =
                         DistanceToBrightness(
-                            -verticalDifference,
+                            lowerDistance,
                             safeVerticalRange
                         );
 
                     lowerApproachValue =
                         Mathf.Max(
                             lowerApproachValue,
-                            value
+                            lowerValue
                         );
                 }
-                else
-                {
-                    /*
-                     * 障害物の中心が飛行機と同じ高さの場合。
-                     * 上下両方を最大にする。
-                     */
-                    upperApproachValue = 255;
-                    lowerApproachValue = 255;
-                }
+                Debug.Log("obstacleTopY: " + obstacleTopY);
+                Debug.Log("obstacleBottomY: " + obstacleBottomY);
             }
+            // Debug.Log("horizontalDistance: " + horizontalDistance);
 
             /*
              * X、Z平面レーダーへ障害物を追加する。
@@ -284,6 +342,8 @@ public class radar : MonoBehaviour
 
         obstacleApproachValue =
             Mathf.Clamp(obstacleApproachValue, 0, 255);
+
+        Debug.Log("ue: " + upperApproachValue + ", shita: " + lowerApproachValue);
     }
 
     /// <summary>
