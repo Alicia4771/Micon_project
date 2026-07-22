@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -7,6 +8,19 @@ using UnityEngine.InputSystem;
 
 public class StartSceneManager : MonoBehaviour
 {
+    private const int MatrixSize = 16;
+
+    // 16×16＝256ビットを32ビットずつ格納するため8個
+    private const int LedWordCount = 8;
+
+    /*
+     * radar.csと送信個数を合わせるため9個にする。
+     *
+     * [0]～[7]：16×16 LEDマトリクス
+     * [8]     ：未使用なので0
+     */
+    private const int TransmitWordCount = 9;
+
     [Header("Scene Settings")]
     [SerializeField]
     private string nextSceneName = "AirplaneChooseScene";
@@ -20,6 +34,31 @@ public class StartSceneManager : MonoBehaviour
 
     [SerializeField, Tooltip("基準角度を取得するまでの待機時間")]
     private float calibrationDelaySeconds = 1.0f;
+
+    [Header("Start LED Matrix")]
+
+    [SerializeField, Tooltip("スタート画面でLED表示を送信する")]
+    private bool sendStartLedMessage = true;
+
+    [SerializeField, Min(0.0f),
+     Tooltip("シリアルポートが開くまで待つ時間")]
+    private float ledFirstSendDelaySeconds = 1.0f;
+
+    [SerializeField, Min(0.1f),
+     Tooltip("送信失敗時または繰り返し送信時の間隔")]
+    private float ledSendIntervalSeconds = 1.0f;
+
+    [SerializeField,
+     Tooltip("成功後もLEDデータを繰り返し送信する")]
+    private bool repeatLedTransmission = false;
+
+    [SerializeField,
+     Tooltip("LED表示の左右が逆の場合に有効にする")]
+    private bool mirrorLedHorizontal = false;
+
+    [SerializeField,
+     Tooltip("LED表示の上下が逆の場合に有効にする")]
+    private bool mirrorLedVertical = false;
 
     // センサー受信前にSensorReceiverが返す初期値
     private const string DefaultSensorData =
@@ -36,6 +75,77 @@ public class StartSceneManager : MonoBehaviour
 
     // 最初に有効なセンサーデータを取得した時間
     private float firstValidSensorDataTime = -1.0f;
+
+    // LED送信用コルーチン
+    private Coroutine ledSendCoroutine;
+
+    /*
+     * 16×16のLED表示データ
+     *
+     * startLedData[行, 列]
+     *
+     * 0：消灯
+     * 1：点灯
+     */
+    private readonly int[,] startLedData =
+        new int[MatrixSize, MatrixSize];
+
+    /*
+     * 各文字は8×8ドット。
+     *
+     * byteの左端のビットが文字の左側。
+     * 1が点灯、0が消灯。
+     *
+     * 「傾」は8×8では複雑なため、
+     * 読み取れる範囲で簡略化している。
+     */
+    private static readonly byte[] TiltCharacter =
+    {
+        0b01001110,
+        0b01100100,
+        0b01111000,
+        0b11101110,
+        0b01101110,
+        0b01101000,
+        0b01011110,
+        0b01001010
+    };
+
+    private static readonly byte[] KeCharacter =
+    {
+        0b01000100,
+        0b01011110,
+        0b01000100,
+        0b01000100,
+        0b01000100,
+        0b01001100,
+        0b00001000,
+        0b00000000
+    };
+
+    private static readonly byte[] TeCharacter =
+    {
+        0b00000000,
+        0b00111110,
+        0b00001000,
+        0b00010000,
+        0b00010000,
+        0b00010000,
+        0b00011000,
+        0b00000100
+    };
+
+    private static readonly byte[] NeCharacter =
+    {
+        0b00101100,
+        0b00110010,
+        0b00100010,
+        0b01100010,
+        0b01101110,
+        0b00101011,
+        0b00101100,
+        0b00000000
+    };
 
     private void Awake()
     {
@@ -55,6 +165,19 @@ public class StartSceneManager : MonoBehaviour
                 "SensorReceiverが見つかりません。" +
                 "Enterキーによるシーン遷移のみ使用できます。"
             );
+
+            return;
+        }
+
+        // 「傾けてね」の16×16データを作成する
+        CreateStartLedMessage();
+
+        if (sendStartLedMessage)
+        {
+            ledSendCoroutine =
+                StartCoroutine(
+                    SendStartLedMessageCoroutine()
+                );
         }
     }
 
@@ -115,8 +238,8 @@ public class StartSceneManager : MonoBehaviour
             return;
         }
 
-        // SensorReceiverから現在の受信文字列を取得
-        string rawSensorData = sensorReceiver.GetSensorData();
+        string rawSensorData =
+            sensorReceiver.GetSensorData();
 
         if (string.IsNullOrWhiteSpace(rawSensorData))
         {
@@ -127,14 +250,13 @@ public class StartSceneManager : MonoBehaviour
 
         /*
          * SensorReceiverは実際のデータを受信する前に
-         * "0,0,0,0,0,0,0,0,0"を返すため除外する
+         * "0,0,0,0,0,0,0,0,0"を返すため除外する。
          */
         if (rawSensorData == DefaultSensorData)
         {
             return;
         }
 
-        // DataManagerにセンサー値を保存
         if (!DataManager.SetSensorValue(rawSensorData))
         {
             return;
@@ -144,8 +266,8 @@ public class StartSceneManager : MonoBehaviour
             DataManager.GetEulerSensorValue();
 
         /*
-         * 最初の有効なデータを受け取った直後は、
-         * センサー値が安定していない可能性があるため少し待つ
+         * 最初の有効データを受け取った直後は、
+         * センサー値が安定するまで少し待つ。
          */
         if (firstValidSensorDataTime < 0.0f)
         {
@@ -176,9 +298,8 @@ public class StartSceneManager : MonoBehaviour
         }
 
         /*
-         * Mathf.DeltaAngleを使用することで、
-         * 359度から1度への変化を358度ではなく
-         * 2度として計算できる
+         * Mathf.DeltaAngleを使うことで、
+         * 359度から1度への変化を2度として計算する。
          */
         float differenceX = Mathf.Abs(
             Mathf.DeltaAngle(
@@ -201,14 +322,13 @@ public class StartSceneManager : MonoBehaviour
             )
         );
 
-        // 確認用ログ。不要ならコメントアウト可能
         Debug.Log(
             $"角度差 X={differenceX:F1}, " +
             $"Y={differenceY:F1}, " +
             $"Z={differenceZ:F1}"
         );
 
-        // X、Y、Zのどれかがしきい値以上変化した場合
+        // X、Y、Zのいずれかがしきい値以上になった場合
         if (differenceX >= tiltThresholdDegrees ||
             differenceY >= tiltThresholdDegrees ||
             differenceZ >= tiltThresholdDegrees)
@@ -222,6 +342,257 @@ public class StartSceneManager : MonoBehaviour
         }
     }
 
+    //==============================================================
+    // LEDマトリクス
+    //==============================================================
+
+    /// <summary>
+    /// 16×16の各領域に「傾」「け」「て」「ね」を配置する
+    ///
+    /// 左上：傾
+    /// 右上：け
+    /// 左下：て
+    /// 右下：ね
+    /// </summary>
+    private void CreateStartLedMessage()
+    {
+        ClearStartLedData();
+
+        Draw8x8Character(
+            TiltCharacter,
+            startRow: 0,
+            startColumn: 0
+        );
+
+        Draw8x8Character(
+            KeCharacter,
+            startRow: 0,
+            startColumn: 8
+        );
+
+        Draw8x8Character(
+            TeCharacter,
+            startRow: 8,
+            startColumn: 0
+        );
+
+        Draw8x8Character(
+            NeCharacter,
+            startRow: 8,
+            startColumn: 8
+        );
+    }
+
+    /// <summary>
+    /// 8×8文字を16×16配列へ描画する
+    /// </summary>
+    private void Draw8x8Character(
+        byte[] characterData,
+        int startRow,
+        int startColumn
+    )
+    {
+        if (characterData == null ||
+            characterData.Length != 8)
+        {
+            Debug.LogError(
+                "文字データは8行である必要があります。"
+            );
+
+            return;
+        }
+
+        for (int characterRow = 0;
+             characterRow < 8;
+             characterRow++)
+        {
+            byte rowData =
+                characterData[characterRow];
+
+            for (int characterColumn = 0;
+                 characterColumn < 8;
+                 characterColumn++)
+            {
+                /*
+                 * byteのbit7を左端、
+                 * bit0を右端として読み取る。
+                 */
+                int bitIndex =
+                    7 - characterColumn;
+
+                bool isOn =
+                    (rowData &
+                     (1 << bitIndex)) != 0;
+
+                int matrixRow =
+                    startRow + characterRow;
+
+                int matrixColumn =
+                    startColumn + characterColumn;
+
+                if (matrixRow < 0 ||
+                    matrixRow >= MatrixSize ||
+                    matrixColumn < 0 ||
+                    matrixColumn >= MatrixSize)
+                {
+                    continue;
+                }
+
+                startLedData[
+                    matrixRow,
+                    matrixColumn
+                ] = isOn ? 1 : 0;
+            }
+        }
+    }
+
+    /// <summary>
+    /// LED配列をすべて消灯状態にする
+    /// </summary>
+    private void ClearStartLedData()
+    {
+        for (int row = 0;
+             row < MatrixSize;
+             row++)
+        {
+            for (int column = 0;
+                 column < MatrixSize;
+                 column++)
+            {
+                startLedData[row, column] = 0;
+            }
+        }
+    }
+
+    /// <summary>
+    /// シリアルポートが開くまで待ってLEDデータを送信する
+    /// </summary>
+    private IEnumerator SendStartLedMessageCoroutine()
+    {
+        yield return new WaitForSecondsRealtime(
+            ledFirstSendDelaySeconds
+        );
+
+        while (!isChangingScene)
+        {
+            bool sendSucceeded =
+                SendStartLedMessage();
+
+            /*
+             * 繰り返し送信が無効で、
+             * 送信に成功したら終了する。
+             *
+             * 送信に失敗した場合は一定時間後に再試行する。
+             */
+            if (sendSucceeded &&
+                !repeatLedTransmission)
+            {
+                yield break;
+            }
+
+            yield return new WaitForSecondsRealtime(
+                Mathf.Max(
+                    0.1f,
+                    ledSendIntervalSeconds
+                )
+            );
+        }
+    }
+
+    /// <summary>
+    /// 「傾けてね」を圧縮してArduinoへ送信する
+    /// </summary>
+    private bool SendStartLedMessage()
+    {
+        if (sensorReceiver == null)
+        {
+            return false;
+        }
+
+        uint[] packedData =
+            PackStartLedData();
+
+        /*
+         * CSV形式：
+         *
+         * data0,data1,...,data7,0
+         *
+         * SensorReceiver.SendToArduino()が
+         * 最後に改行を追加する。
+         */
+        string packet =
+            string.Join(",", packedData);
+
+        bool result =
+            sensorReceiver.SendToArduino(packet);
+
+        if (result)
+        {
+            Debug.Log(
+                "スタート画面のLEDデータを送信しました：" +
+                packet
+            );
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// 16×16の256ビットを8個のuintへ圧縮する
+    /// </summary>
+    private uint[] PackStartLedData()
+    {
+        uint[] packedData =
+            new uint[TransmitWordCount];
+
+        for (int outputRow = 0;
+             outputRow < MatrixSize;
+             outputRow++)
+        {
+            for (int outputColumn = 0;
+                 outputColumn < MatrixSize;
+                 outputColumn++)
+            {
+                int sourceRow =
+                    mirrorLedVertical
+                        ? MatrixSize - 1 - outputRow
+                        : outputRow;
+
+                int sourceColumn =
+                    mirrorLedHorizontal
+                        ? MatrixSize - 1 - outputColumn
+                        : outputColumn;
+
+                int index =
+                    outputRow * MatrixSize +
+                    outputColumn;
+
+                int uintIndex =
+                    index / 32;
+
+                int bitIndex =
+                    index % 32;
+
+                if (startLedData[
+                        sourceRow,
+                        sourceColumn
+                    ] == 1)
+                {
+                    packedData[uintIndex] |=
+                        1u << bitIndex;
+                }
+            }
+        }
+
+        /*
+         * radar.csでは9個目に接近情報を入れているが、
+         * スタート画面では使用しない。
+         */
+        packedData[LedWordCount] = 0u;
+
+        return packedData;
+    }
+
     /// <summary>
     /// 指定したシーンへ遷移する
     /// </summary>
@@ -233,6 +604,12 @@ public class StartSceneManager : MonoBehaviour
         }
 
         isChangingScene = true;
+
+        if (ledSendCoroutine != null)
+        {
+            StopCoroutine(ledSendCoroutine);
+            ledSendCoroutine = null;
+        }
 
         Debug.Log(
             reason +
