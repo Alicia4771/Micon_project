@@ -7,34 +7,28 @@ using System.Threading;
 
 public class SensorReceiver : MonoBehaviour
 {
-    //==================================================
-    // Constants
-    //==================================================
+    /// <summary>
+    /// センサー値が不足または空欄だった場合の補完方法。
+    /// </summary>
+    public enum MissingValueFillMode
+    {
+        [InspectorName("直前の値で補完")]
+        PreviousValue,
 
-    /*
-     * Arduinoから送られるセンサー値の個数。
-     *
-     * [e1, e2, e3, g1, g2, g3, a1, a2, a3]
-     */
+        [InspectorName("0で補完")]
+        Zero
+    }
+
+    // Arduinoから受信する値の個数
+    // [e1, e2, e3, g1, g2, g3, a1, a2, a3]
     private const int SensorValueCount = 9;
 
-    /*
-     * 各インデックスの名称。
-     * 補完時のエラーメッセージに使用する。
-     */
     private static readonly string[] SensorValueNames =
     {
-        "e1",
-        "e2",
-        "e3",
-        "g1",
-        "g2",
-        "g3",
-        "a1",
-        "a2",
-        "a3"
+        "e1", "e2", "e3",
+        "g1", "g2", "g3",
+        "a1", "a2", "a3"
     };
-
 
     //==================================================
     // Serial settings
@@ -42,62 +36,71 @@ public class SensorReceiver : MonoBehaviour
 
     [Header("Serial Settings")]
 
-    // Macで使用するシリアルポート名
+    [SerializeField]
     private string portName =
         "/dev/cu.usbserial-AQ01LGU4";
 
     [SerializeField]
     private int baudRate = 115200;
 
+    //==================================================
+    // Missing-value completion settings
+    //==================================================
+
+    [Header("Missing Sensor Value Settings")]
+
+    [SerializeField]
+    [Tooltip("不足または空欄だったセンサー値の補完方法")]
+    private MissingValueFillMode missingValueFillMode =
+        MissingValueFillMode.PreviousValue;
+
+    /*
+     * 読み取りスレッドから参照する補完方法。
+     *
+     * Inspectorを再生中に変更した場合にも反映できるよう、
+     * Update()でmissingValueFillModeから同期する。
+     */
+    private int activeMissingValueFillMode;
 
     //==================================================
     // Received sensor data
     //==================================================
 
     /*
-     * 最後に使用可能な状態で受信した
-     * センサーデータ。
+     * 最後に利用可能な状態で受信したセンサーデータ。
      *
-     * 順番：
-     *
-     * オイラー角3個
-     * ジャイロ3個
-     * 加速度3個
+     * 必ず9個のCSV形式になる。
      */
     private string sensor_raw_data =
         "0,0,0,0,0,0,0,0,0";
 
     /*
-     * 最後に9個すべて正常に受信できた値。
+     * 各項目について、
+     * 直前に実際に受信できた正常値を保存する。
      *
-     * まだ正常な9個を一度も受信していない場合は、
-     * 初期値の0を不足部分の補完に使用する。
+     * 補完によって作られた値では、
+     * この履歴を上書きしない。
      */
-    private readonly string[] lastCompleteSensorValues =
+    private readonly string[] previousSensorValues =
     {
-        "0",
-        "0",
-        "0",
-        "0",
-        "0",
-        "0",
-        "0",
-        "0",
-        "0"
+        "0", "0", "0",
+        "0", "0", "0",
+        "0", "0", "0"
     };
 
     /*
-     * 9個すべて正常なデータを
-     * 一度でも受信したか。
+     * 各項目について、
+     * 一度でも正常値を受信したか。
+     *
+     * 直前値がまだ存在しない項目は0で補完する。
      */
-    private bool hasCompleteSensorValues = false;
+    private readonly bool[] hasPreviousSensorValue =
+        new bool[SensorValueCount];
 
     /*
-     * 新しい使用可能なセンサーデータを
-     * 受信したかどうか。
+     * 前回の取得後に新しいデータを受信したか。
      */
-    private bool hasNewSensorData = false;
-
+    private bool hasNewSensorData;
 
     //==================================================
     // Serial
@@ -107,77 +110,52 @@ public class SensorReceiver : MonoBehaviour
 
     private Thread readThread;
 
-    /*
-     * 別スレッドから読み書きするため、
-     * volatileを付ける。
-     */
-    private volatile bool running = false;
-
+    private volatile bool running;
 
     //==================================================
     // Error status
     //==================================================
 
     /*
-     * 補完できなかった破損データの累計数。
+     * 補完できず破棄したデータの累計。
      */
-    private int invalidSensorLineCount = 0;
+    private int invalidSensorLineCount;
 
     /*
-     * 最後に受信した、
-     * 補完できなかった破損データ。
+     * 最後に破棄したデータ。
      */
     private string lastInvalidSensorLine = "";
 
     /*
-     * 読み取りスレッドで発生したシリアルエラーを
-     * Unityのメインスレッドへ渡す。
+     * 読み取りスレッドから
+     * メインスレッドへ渡すエラー。
      */
-    private string pendingSerialError = null;
+    private string pendingSerialError;
 
     /*
-     * 7個または8個だったため補完した情報を、
-     * Unityのメインスレッドへ渡す。
+     * 補完を行った際の
+     * Debug.LogError用キュー。
      */
     private readonly Queue<string>
         pendingCompletionErrors =
             new Queue<string>();
 
-    /*
-     * 前回Consoleへ表示した
-     * 破損データの累計数。
-     */
-    private int lastReportedInvalidCount = 0;
+    private int lastReportedInvalidCount;
 
-    /*
-     * 破損データの警告を次に表示できる時刻。
-     */
-    private float nextInvalidLogTime = 0f;
-
+    private float nextInvalidLogTime;
 
     //==================================================
     // Locks
     //==================================================
 
-    /*
-     * センサーデータを安全に共有するためのロック。
-     */
     private readonly object dataLockObj =
         new object();
 
-    /*
-     * UnityからArduinoへの送信処理が
-     * 同時に実行されないようにするロック。
-     */
     private readonly object writeLockObj =
         new object();
 
-    /*
-     * エラー情報を安全に共有するためのロック。
-     */
     private readonly object statusLockObj =
         new object();
-
 
     //==================================================
     // Start
@@ -185,11 +163,15 @@ public class SensorReceiver : MonoBehaviour
 
     private void Start()
     {
-        serial =
-            new SerialPort(
-                portName,
-                baudRate
-            );
+        Volatile.Write(
+            ref activeMissingValueFillMode,
+            (int)missingValueFillMode
+        );
+
+        serial = new SerialPort(
+            portName,
+            baudRate
+        );
 
         /*
          * Arduino側の改行と合わせる。
@@ -224,7 +206,8 @@ public class SensorReceiver : MonoBehaviour
 
             Debug.Log(
                 "SerialPort Opened: " +
-                portName
+                portName,
+                this
             );
         }
         catch (Exception e)
@@ -240,16 +223,14 @@ public class SensorReceiver : MonoBehaviour
 
         running = true;
 
-        readThread =
-            new Thread(
-                ReadSerialLoop
-            );
+        readThread = new Thread(
+            ReadSerialLoop
+        );
 
         readThread.IsBackground = true;
 
         readThread.Start();
     }
-
 
     //==================================================
     // Update
@@ -257,6 +238,15 @@ public class SensorReceiver : MonoBehaviour
 
     private void Update()
     {
+        /*
+         * 再生中にInspectorの選択を変更した場合にも、
+         * 読み取りスレッド側へ反映する。
+         */
+        Volatile.Write(
+            ref activeMissingValueFillMode,
+            (int)missingValueFillMode
+        );
+
         OutputPendingSerialError();
 
         OutputInvalidDataWarning();
@@ -264,10 +254,9 @@ public class SensorReceiver : MonoBehaviour
         OutputCompletionErrors();
     }
 
-
     /// <summary>
     /// 読み取りスレッドで発生した
-    /// シリアルエラーをConsoleへ出力する
+    /// シリアルエラーを出力する。
     /// </summary>
     private void OutputPendingSerialError()
     {
@@ -296,10 +285,9 @@ public class SensorReceiver : MonoBehaviour
         }
     }
 
-
     /// <summary>
-    /// 補完できなかった破損データについて
-    /// Consoleへ警告を出力する
+    /// 補完できず破棄したデータについて
+    /// 警告を出力する。
     /// </summary>
     private void OutputInvalidDataWarning()
     {
@@ -308,11 +296,6 @@ public class SensorReceiver : MonoBehaviour
                 ref invalidSensorLineCount
             );
 
-        /*
-         * 破損データが連続した場合でも、
-         * Consoleを埋め尽くさないように
-         * 最大1秒に1回だけ表示する。
-         */
         if (
             currentInvalidCount ==
             lastReportedInvalidCount
@@ -321,6 +304,10 @@ public class SensorReceiver : MonoBehaviour
             return;
         }
 
+        /*
+         * Consoleを埋め尽くさないよう、
+         * 最大1秒に1回だけ表示する。
+         */
         if (
             Time.unscaledTime <
             nextInvalidLogTime
@@ -350,13 +337,12 @@ public class SensorReceiver : MonoBehaviour
             currentInvalidCount;
 
         nextInvalidLogTime =
-            Time.unscaledTime + 1f;
+            Time.unscaledTime + 1.0f;
     }
 
-
     /// <summary>
-    /// 7個または8個のデータを補完した場合の
-    /// エラーをConsoleへ出力する
+    /// センサー値を補完したことを
+    /// Debug.LogErrorで出力する。
     /// </summary>
     private void OutputCompletionErrors()
     {
@@ -366,7 +352,9 @@ public class SensorReceiver : MonoBehaviour
 
             lock (statusLockObj)
             {
-                if (pendingCompletionErrors.Count > 0)
+                if (
+                    pendingCompletionErrors.Count > 0
+                )
                 {
                     completionError =
                         pendingCompletionErrors.Dequeue();
@@ -380,10 +368,6 @@ public class SensorReceiver : MonoBehaviour
                 break;
             }
 
-            /*
-             * UnityにはDebug.Errorは存在しないため、
-             * Debug.LogErrorを使用する。
-             */
             Debug.LogError(
                 completionError,
                 this
@@ -391,14 +375,13 @@ public class SensorReceiver : MonoBehaviour
         }
     }
 
-
     //==================================================
     // Read
     //==================================================
 
     /// <summary>
-    /// Arduinoからのシリアルデータを
-    /// 別スレッドで継続的に読み取る
+    /// Arduinoからシリアルデータを
+    /// 継続的に読み取る。
     /// </summary>
     private void ReadSerialLoop()
     {
@@ -410,16 +393,9 @@ public class SensorReceiver : MonoBehaviour
         {
             try
             {
-                /*
-                 * 改行までを1つのデータとして受信する。
-                 */
                 string line =
                     serial.ReadLine().Trim();
 
-                /*
-                 * データの確認と、
-                 * 7個・8個の場合の補完を行う。
-                 */
                 bool normalizeResult =
                     TryNormalizeSensorLine(
                         line,
@@ -439,17 +415,13 @@ public class SensorReceiver : MonoBehaviour
                             line;
                     }
 
-                    /*
-                     * 補完できないデータは
-                     * sensor_raw_dataへ保存しない。
-                     */
                     continue;
                 }
 
                 /*
-                 * 値を補完した場合は、
-                 * メインスレッドでDebug.LogErrorを
-                 * 実行するためキューへ追加する。
+                 * 補完を行った場合、
+                 * メインスレッド側で
+                 * Debug.LogErrorを出力する。
                  */
                 if (!string.IsNullOrEmpty(
                         completionError
@@ -477,8 +449,7 @@ public class SensorReceiver : MonoBehaviour
             catch (TimeoutException)
             {
                 /*
-                 * ReadTimeoutによるタイムアウトは
-                 * 正常な動作なので無視する。
+                 * ReadTimeoutは正常動作なので無視する。
                  */
             }
             catch (Exception e)
@@ -495,34 +466,27 @@ public class SensorReceiver : MonoBehaviour
         }
     }
 
-
     //==================================================
     // Validation and completion
     //==================================================
 
     /// <summary>
-    /// 受信したセンサーデータを
-    /// 9個のデータへ正規化する。
-    ///
-    /// 受信順：
-    ///
-    /// [e1, e2, e3, g1, g2, g3, a1, a2, a3]
+    /// 受信したデータを9個へ正規化する。
     ///
     /// 9個：
-    /// そのまま使用し、前回正常値として保存する。
+    /// そのまま使用する。
     ///
     /// 10個：
-    /// 最後の1個を削除して、最初の9個を使用する。
+    /// 最後の1個を削除し、最初の9個を使用する。
     ///
     /// 8個：
-    /// a3を前回正常値または0で補完する。
+    /// 不足したa3を選択中の方式で補完する。
     ///
     /// 7個：
-    /// a2とa3を前回正常値または0で補完する。
+    /// 不足したa2、a3を選択中の方式で補完する。
     ///
     /// 空欄：
-    /// 空欄になっているインデックスを
-    /// 前回正常値または0で補完する。
+    /// そのインデックスを選択中の方式で補完する。
     /// </summary>
     private bool TryNormalizeSensorLine(
         string line,
@@ -547,7 +511,7 @@ public class SensorReceiver : MonoBehaviour
 
         /*
          * 10個の場合は、
-         * 最後のインデックス9を削除する。
+         * 余分な最後の1個を削除する。
          */
         if (receivedValues.Length == 10)
         {
@@ -559,7 +523,7 @@ public class SensorReceiver : MonoBehaviour
 
         /*
          * 7個・8個・9個以外は、
-         * この処理では補完できないため破棄する。
+         * この処理では補完せず破棄する。
          */
         if (
             receivedValues.Length != 7 &&
@@ -573,13 +537,17 @@ public class SensorReceiver : MonoBehaviour
         string[] completedValues =
             new string[SensorValueCount];
 
-        List<string> missingValueNames =
+        /*
+         * 今回、本当に受信できた項目を記録する。
+         *
+         * 補完した値を直前値として保存しないために
+         * 使用する。
+         */
+        bool[] receivedSuccessfully =
+            new bool[SensorValueCount];
+
+        List<string> completionDetails =
             new List<string>();
-
-
-        //==================================================
-        // Parse received values
-        //==================================================
 
         for (int i = 0;
              i < SensorValueCount;
@@ -608,7 +576,7 @@ public class SensorReceiver : MonoBehaviour
                     );
 
                 /*
-                 * 値が存在するのに数値へ変換できない場合は、
+                 * 値が存在するが数値として解析できない場合は、
                  * 受信データ全体を破棄する。
                  */
                 if (!parseResult)
@@ -632,56 +600,59 @@ public class SensorReceiver : MonoBehaviour
                         "R",
                         CultureInfo.InvariantCulture
                     );
+
+                receivedSuccessfully[i] = true;
             }
             else
             {
-                /*
-                 * 値が不足または空欄の場合。
-                 *
-                 * 完全な9個を以前に受信していれば
-                 * そのときの同じインデックスを使用する。
-                 *
-                 * まだ完全な9個を受信していなければ
-                 * 初期値の0を使用する。
-                 */
                 completedValues[i] =
-                    hasCompleteSensorValues
-                        ? lastCompleteSensorValues[i]
-                        : "0";
+                    GetCompletionValue(
+                        i,
+                        out string completionSource
+                    );
 
-                missingValueNames.Add(
-                    SensorValueNames[i]
+                completionDetails.Add(
+                    $"{SensorValueNames[i]}=" +
+                    completionSource
                 );
             }
         }
 
-
-        //==================================================
-        // Save complete values
-        //==================================================
-
-        if (missingValueNames.Count == 0)
+        /*
+         * 今回実際に受信できた項目だけを
+         * 直前値として保存する。
+         *
+         * 補完した項目では履歴を上書きしない。
+         */
+        for (int i = 0;
+             i < SensorValueCount;
+             i++)
         {
-            /*
-             * 今回のデータに不足がなかった場合だけ、
-             * 新しい前回正常値として保存する。
-             *
-             * 補完したデータは前回正常値にしない。
-             */
-            Array.Copy(
-                completedValues,
-                lastCompleteSensorValues,
-                SensorValueCount
-            );
+            if (!receivedSuccessfully[i])
+            {
+                continue;
+            }
 
-            hasCompleteSensorValues = true;
+            previousSensorValues[i] =
+                completedValues[i];
+
+            hasPreviousSensorValue[i] = true;
         }
-        else
+
+        /*
+         * 補完を行った場合は、
+         * Consoleへ出力する内容を作成する。
+         */
+        if (completionDetails.Count > 0)
         {
-            string completionSource =
-                hasCompleteSensorValues
-                    ? "前回正常に受信した値"
-                    : "0";
+            MissingValueFillMode currentMode =
+                GetActiveMissingValueFillMode();
+
+            string selectedModeText =
+                currentMode ==
+                MissingValueFillMode.PreviousValue
+                    ? "直前の値で補完"
+                    : "0で補完";
 
             string completedCsv =
                 string.Join(
@@ -691,9 +662,11 @@ public class SensorReceiver : MonoBehaviour
 
             completionError =
                 "[SENSOR DATA COMPLETION] " +
-                $"受信値が{originalValueCount}個だったため、" +
-                $"不足部分 [{string.Join(", ", missingValueNames)}] を" +
-                $"{completionSource}で補完しました。" +
+                $"受信値が{originalValueCount}個、" +
+                "または一部が空欄だったため補完しました。" +
+                $" 設定=[{selectedModeText}]" +
+                $" 補完内容=[" +
+                $"{string.Join(", ", completionDetails)}]" +
                 $" Received=[{line}]" +
                 $" Completed=[{completedCsv}]";
         }
@@ -707,13 +680,82 @@ public class SensorReceiver : MonoBehaviour
         return true;
     }
 
+    /// <summary>
+    /// Inspectorで選択した方式に従って
+    /// 不足値を補完する。
+    /// </summary>
+    private string GetCompletionValue(
+        int index,
+        out string completionSource
+    )
+    {
+        MissingValueFillMode currentMode =
+            GetActiveMissingValueFillMode();
+
+        if (
+            currentMode ==
+            MissingValueFillMode.PreviousValue
+        )
+        {
+            /*
+             * この項目について、
+             * 以前に正常値を受信済みなら
+             * その直前値を使用する。
+             */
+            if (hasPreviousSensorValue[index])
+            {
+                completionSource =
+                    $"直前値(" +
+                    $"{previousSensorValues[index]})";
+
+                return previousSensorValues[index];
+            }
+
+            /*
+             * 直前値で補完する設定でも、
+             * その項目をまだ一度も正常受信していなければ
+             * 直前値が存在しないため0を使用する。
+             */
+            completionSource =
+                "0(直前値なし)";
+
+            return "0";
+        }
+
+        completionSource = "0";
+
+        return "0";
+    }
+
+    /// <summary>
+    /// 読み取りスレッド側で使用する
+    /// 現在の補完方法を取得する。
+    /// </summary>
+    private MissingValueFillMode
+        GetActiveMissingValueFillMode()
+    {
+        int modeValue =
+            Volatile.Read(
+                ref activeMissingValueFillMode
+            );
+
+        if (
+            modeValue ==
+            (int)MissingValueFillMode.Zero
+        )
+        {
+            return MissingValueFillMode.Zero;
+        }
+
+        return MissingValueFillMode.PreviousValue;
+    }
 
     //==================================================
     // Write
     //==================================================
 
     /// <summary>
-    /// Arduinoへ文字列を1行送信する
+    /// Arduinoへ文字列を1行送信する。
     /// </summary>
     public bool SendToArduino(
         string data
@@ -750,16 +792,13 @@ public class SensorReceiver : MonoBehaviour
              */
             lock (writeLockObj)
             {
-                /*
-                 * WriteLine()によって、
-                 * 最後にNewLineの"\n"が付加される。
-                 */
                 serial.WriteLine(data);
             }
 
             Debug.Log(
                 "Arduinoへ送信: " +
-                data
+                data,
+                this
             );
 
             return true;
@@ -776,14 +815,10 @@ public class SensorReceiver : MonoBehaviour
         }
     }
 
-
     /// <summary>
     /// 20個の0または1を
-    /// CSV形式でArduinoへ送信する
+    /// CSV形式でArduinoへ送信する。
     /// </summary>
-    /// <param name="values">
-    /// 0または1が入った長さ20の配列
-    /// </param>
     public bool SendCsvData(
         int[] values
     )
@@ -840,16 +875,13 @@ public class SensorReceiver : MonoBehaviour
         );
     }
 
-
     //==================================================
     // Get sensor data
     //==================================================
 
     /// <summary>
-    /// 最後に使用可能な状態で受信した
+    /// 最後に利用可能な状態で受信した
     /// センサーデータを取得する。
-    ///
-    /// 戻り値の順番：
     ///
     /// [e1, e2, e3, g1, g2, g3, a1, a2, a3]
     /// </summary>
@@ -861,17 +893,10 @@ public class SensorReceiver : MonoBehaviour
         }
     }
 
-
     /// <summary>
     /// 前回の取得後に新しいデータを
-    /// 受信している場合だけ取得する
+    /// 受信している場合だけ取得する。
     /// </summary>
-    /// <param name="sensorData">
-    /// 新しく受信したセンサーデータ
-    /// </param>
-    /// <returns>
-    /// 新しいデータが存在する場合はtrue
-    /// </returns>
     public bool TryGetSensorData(
         out string sensorData
     )
@@ -898,10 +923,8 @@ public class SensorReceiver : MonoBehaviour
         }
     }
 
-
     /// <summary>
-    /// これまでに破棄した、
-    /// 補完できないデータの数を取得する
+    /// これまでに破棄したデータ数を取得する。
     /// </summary>
     public int GetInvalidSensorLineCount()
     {
@@ -909,7 +932,6 @@ public class SensorReceiver : MonoBehaviour
             ref invalidSensorLineCount
         );
     }
-
 
     //==================================================
     // Close
@@ -920,16 +942,14 @@ public class SensorReceiver : MonoBehaviour
         CloseSerialPort();
     }
 
-
     private void OnApplicationQuit()
     {
         CloseSerialPort();
     }
 
-
     /// <summary>
     /// 読み取りスレッドと
-    /// シリアルポートを安全に終了する
+    /// シリアルポートを終了する。
     /// </summary>
     private void CloseSerialPort()
     {
@@ -956,7 +976,8 @@ public class SensorReceiver : MonoBehaviour
                     serial.Close();
 
                     Debug.Log(
-                        "SerialPort Closed"
+                        "SerialPort Closed",
+                        this
                     );
                 }
             }
