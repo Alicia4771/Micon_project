@@ -7,6 +7,12 @@ public static class DataManager
     private static Vector3 gyro_sensor_value;
     private static Vector3 euler_sensor_value;
 
+    // ゲーム起動後に最初に取得した水平姿勢
+    private static Vector3 initial_euler_sensor_value;
+
+    // 水平姿勢を一度でも取得したか
+    private static bool has_initial_euler_sensor_value = false;
+
     private static bool has_received_sensor_data = false;
 
     private static int score = 0;
@@ -21,6 +27,14 @@ public static class DataManager
         euler_sensor_value = Vector3.zero;
 
         has_received_sensor_data = false;
+
+        /*
+         * initial_euler_sensor_value と
+         * has_initial_euler_sensor_value はここでは初期化しない。
+         *
+         * Initialize()がシーン遷移時に呼ばれても、
+         * 最初に取得した水平姿勢を維持するため。
+         */
 
         obstacle_list.Clear();
         
@@ -97,6 +111,60 @@ public static class DataManager
     public static Vector3 GetEulerSensorValue()
     {
         return euler_sensor_value;
+    }
+
+
+    /// <summary>
+    /// 最初の水平姿勢を一度だけ保存する。
+    /// すでに保存済みの場合は上書きしない。
+    /// </summary>
+    /// <returns>
+    /// 今回保存できた場合はtrue。
+    /// すでに保存済みの場合はfalse。
+    /// </returns>
+    public static bool TrySetInitialEulerSensorValue(
+        Vector3 initial_euler_value
+    )
+    {
+        if (has_initial_euler_sensor_value)
+        {
+            return false;
+        }
+
+        initial_euler_sensor_value =
+            initial_euler_value;
+
+        has_initial_euler_sensor_value = true;
+
+        return true;
+    }
+
+    /// <summary>
+    /// 水平姿勢を一度でも取得したか。
+    /// </summary>
+    public static bool HasInitialEulerSensorValue()
+    {
+        return has_initial_euler_sensor_value;
+    }
+
+    /// <summary>
+    /// 最初に取得した水平姿勢を返す。
+    /// </summary>
+    public static Vector3 GetInitialEulerSensorValue()
+    {
+        return initial_euler_sensor_value;
+    }
+
+    /// <summary>
+    /// 水平姿勢を取り直したい場合に呼ぶ。
+    /// 通常のシーン遷移では呼ばない。
+    /// </summary>
+    public static void ResetInitialEulerSensorValue()
+    {
+        initial_euler_sensor_value =
+            Vector3.zero;
+
+        has_initial_euler_sensor_value = false;
     }
 
     /// <summary>

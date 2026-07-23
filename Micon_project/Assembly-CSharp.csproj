@@ -72,6 +72,7 @@
     <Compile Include="Assets/Scripts/StartScene/AirPlaneChoosePanelManager.cs" />
     <Compile Include="Assets/FlyingSystem/Demo_Main/Scripts/Events/RollRight.cs" />
     <Compile Include="Assets/FlyingSystem/GliderFlyingSystem/Demo/Scripts/GliderController.cs" />
+    <Compile Include="Assets/Scripts/tmp_Scene/tmpSceneManager.cs" />
     <Compile Include="Assets/Scripts/StartScene/StartSceneCamera.cs" />
     <Compile Include="Assets/PyroParticles/Demo/DemoScript.cs" />
     <Compile Include="Assets/Scripts/ControlFromSensor.cs" />

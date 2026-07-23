@@ -36,6 +36,9 @@ public class ResultSceneManager : MonoBehaviour
     [SerializeField, Tooltip("センサの基準姿勢を取得するまでの待機時間")]
     private float calibrationDelaySeconds = 1.0f;
 
+    [SerializeField, Tooltip("シーン遷移直後、再び入力を受け付ける水平付近の角度")]
+    private float neutralReleaseDegrees = 10.0f;
+
     /*
      * SensorReceiverが実際のセンサデータを
      * 受信する前に返す初期値。
@@ -48,11 +51,11 @@ public class ResultSceneManager : MonoBehaviour
     // ResultSceneを表示してからの経過時間
     private float elapsedTime;
 
-    // センサの基準姿勢
-    private Vector3 initialEulerAngle;
-
-    // 基準姿勢を取得済みか
-    private bool hasInitialEulerAngle;
+    /*
+     * すでに水平姿勢が保存されている状態でResultSceneへ入った場合、
+     * 前のシーンの傾きを引き継がないよう、一度水平付近へ戻るまで待つ。
+     */
+    private bool waitForNeutralAfterSceneLoad;
 
     // 最初に有効なセンサデータを取得した時間
     private float firstValidSensorDataTime = -1.0f;
@@ -84,6 +87,9 @@ public class ResultSceneManager : MonoBehaviour
 
         elapsedTime = 0.0f;
         isChangingScene = false;
+
+        waitForNeutralAfterSceneLoad =
+            DataManager.HasInitialEulerSensorValue();
 
         /*
          * Propellerが設定されていない場合でも
@@ -220,46 +226,18 @@ public class ResultSceneManager : MonoBehaviour
             DataManager.GetEulerSensorValue();
 
         /*
-         * 最初のデータを受け取った直後は
-         * センサ値が安定していない可能性があるため、
-         * 少し待ってから基準姿勢を取得する。
+         * まだ水平姿勢を一度も保存していない場合だけ、
+         * 最初の有効データを受信してから約1秒待って保存する。
+         *
+         * すでに保存済みなら待たずに既存の値を使用する。
          */
-        if (firstValidSensorDataTime < 0.0f)
-        {
-            firstValidSensorDataTime =
-                Time.unscaledTime;
-
-            return;
-        }
-
-        float timeSinceFirstData =
-            Time.unscaledTime -
-            firstValidSensorDataTime;
-
-        if (timeSinceFirstData <
-            calibrationDelaySeconds)
+        if (!EnsureInitialEulerAngle(currentEulerAngle))
         {
             return;
         }
 
-        // 現在の姿勢を最初の基準姿勢として保存する
-        if (!hasInitialEulerAngle)
-        {
-            initialEulerAngle =
-                currentEulerAngle;
-
-            hasInitialEulerAngle = true;
-
-            Debug.Log(
-                "ResultSceneでセンサの基準姿勢を取得しました。" +
-                $" X={initialEulerAngle.x:F1}," +
-                $" Y={initialEulerAngle.y:F1}," +
-                $" Z={initialEulerAngle.z:F1}",
-                this
-            );
-
-            return;
-        }
+        Vector3 initialEulerAngle =
+            DataManager.GetInitialEulerSensorValue();
 
         /*
          * Mathf.DeltaAngleを使用すると、
@@ -291,6 +269,31 @@ public class ResultSceneManager : MonoBehaviour
             );
 
         /*
+         * 同じ水平値を全シーンで使うと、
+         * 前のシーンで傾けた状態がそのままResultSceneの入力になる。
+         * そのため、一度水平付近へ戻るまでは傾き判定を行わない。
+         */
+        if (waitForNeutralAfterSceneLoad)
+        {
+            bool returnedToNeutral =
+                differenceX <= neutralReleaseDegrees &&
+                differenceY <= neutralReleaseDegrees &&
+                differenceZ <= neutralReleaseDegrees;
+
+            if (returnedToNeutral)
+            {
+                waitForNeutralAfterSceneLoad = false;
+
+                Debug.Log(
+                    "水平付近へ戻ったため、ResultSceneのセンサー入力を有効にしました。",
+                    this
+                );
+            }
+
+            return;
+        }
+
+        /*
          * X、Y、Zのどれか1つでも
          * しきい値以上ならStartSceneへ戻る。
          */
@@ -305,6 +308,55 @@ public class ResultSceneManager : MonoBehaviour
                 $" Z差={differenceZ:F1}"
             );
         }
+    }
+
+    /// <summary>
+    /// DataManagerに水平姿勢がなければ、約1秒待って一度だけ保存する。
+    /// すでに保存済みなら、保存済みの水平姿勢をそのまま使用する。
+    /// </summary>
+    private bool EnsureInitialEulerAngle(
+        Vector3 currentEulerAngle
+    )
+    {
+        if (DataManager.HasInitialEulerSensorValue())
+        {
+            return true;
+        }
+
+        if (firstValidSensorDataTime < 0.0f)
+        {
+            firstValidSensorDataTime =
+                Time.unscaledTime;
+
+            return false;
+        }
+
+        float elapsed =
+            Time.unscaledTime -
+            firstValidSensorDataTime;
+
+        if (elapsed < calibrationDelaySeconds)
+        {
+            return false;
+        }
+
+        bool saved =
+            DataManager.TrySetInitialEulerSensorValue(
+                currentEulerAngle
+            );
+
+        if (saved)
+        {
+            Debug.Log(
+                "最初の水平姿勢をDataManagerに保存しました。" +
+                $" X={currentEulerAngle.x:F1}," +
+                $" Y={currentEulerAngle.y:F1}," +
+                $" Z={currentEulerAngle.z:F1}",
+                this
+            );
+        }
+
+        return DataManager.HasInitialEulerSensorValue();
     }
 
     /// <summary>
