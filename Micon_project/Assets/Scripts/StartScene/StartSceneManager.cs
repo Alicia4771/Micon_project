@@ -43,17 +43,17 @@ public class StartSceneManager : MonoBehaviour
     [SerializeField, Tooltip("スタート画面でLED表示を送信する")]
     private bool sendStartLedMessage = true;
 
+    [SerializeField, Min(0.05f),
+     Tooltip("「傾けてね」を繰り返し送信する間隔")]
+    private float ledContinuousSendIntervalSeconds = 0.1f;
+
     [SerializeField, Min(0.0f),
-     Tooltip("シリアルポートが開くまで待つ時間")]
-    private float ledFirstSendDelaySeconds = 1.0f;
+     Tooltip("すでに水平取得済みの場合、シーン開始後に送信し続ける時間")]
+    private float ledSendDurationWhenAlreadyCalibratedSeconds = 1.0f;
 
-    [SerializeField, Min(0.1f),
-     Tooltip("送信失敗時または繰り返し送信時の間隔")]
-    private float ledSendIntervalSeconds = 1.0f;
-
-    [SerializeField,
-     Tooltip("成功後もLEDデータを繰り返し送信する")]
-    private bool repeatLedTransmission = false;
+    [SerializeField, Min(0.0f),
+     Tooltip("このシーンで水平を取得した後も送信し続ける時間")]
+    private float ledContinueAfterCalibrationSeconds = 1.0f;
 
     [SerializeField,
      Tooltip("LED表示の左右が逆の場合に有効にする")]
@@ -82,6 +82,15 @@ public class StartSceneManager : MonoBehaviour
 
     // LED送信用コルーチン
     private Coroutine ledSendCoroutine;
+
+    // StartSceneへ入った時点ですでに水平姿勢を取得済みだったか
+    private bool hadInitialCalibrationAtSceneStart;
+
+    // StartSceneを開始した時刻
+    private float sceneStartedAtUnscaledTime;
+
+    // このシーンで水平姿勢の取得完了を検出した時刻
+    private float calibrationCompletedAtUnscaledTime = -1.0f;
 
     /*
      * 16×16のLED表示データ
@@ -163,8 +172,32 @@ public class StartSceneManager : MonoBehaviour
 
     private void Start()
     {
-        waitForNeutralAfterSceneLoad =
+        /*
+         * StartSceneへ入った時点で、
+         * DataManagerに水平姿勢が保存済みかを記録する。
+         */
+        hadInitialCalibrationAtSceneStart =
             DataManager.HasInitialEulerSensorValue();
+
+        /*
+         * すでに水平姿勢がある場合、
+         * 前のシーンで傾けたまま遷移している可能性がある。
+         * 一度水平へ戻るまでは入力を受け付けない。
+         */
+        waitForNeutralAfterSceneLoad =
+            hadInitialCalibrationAtSceneStart;
+
+        sceneStartedAtUnscaledTime =
+            Time.unscaledTime;
+
+        calibrationCompletedAtUnscaledTime =
+            -1.0f;
+
+        /*
+         * SensorReceiverの有無に関係なく、
+         * 先に「傾けてね」の配列を作成する。
+         */
+        CreateStartLedMessage();
 
         if (sensorReceiver == null)
         {
@@ -175,9 +208,6 @@ public class StartSceneManager : MonoBehaviour
 
             return;
         }
-
-        // 「傾けてね」の16×16データを作成する
-        CreateStartLedMessage();
 
         if (sendStartLedMessage)
         {
@@ -198,7 +228,10 @@ public class StartSceneManager : MonoBehaviour
         // Enterキーが押された場合
         if (IsEnterPressed())
         {
-            ChangeScene("Enterキーが押されました。");
+            ChangeScene(
+                "Enterキーが押されました。"
+            );
+
             return;
         }
 
@@ -253,7 +286,8 @@ public class StartSceneManager : MonoBehaviour
             return;
         }
 
-        rawSensorData = rawSensorData.Trim();
+        rawSensorData =
+            rawSensorData.Trim();
 
         /*
          * SensorReceiverは実際のデータを受信する前に
@@ -290,26 +324,29 @@ public class StartSceneManager : MonoBehaviour
          * Mathf.DeltaAngleを使うことで、
          * 359度から1度への変化を2度として計算する。
          */
-        float differenceX = Mathf.Abs(
-            Mathf.DeltaAngle(
-                initialEulerAngle.x,
-                currentEulerAngle.x
-            )
-        );
+        float differenceX =
+            Mathf.Abs(
+                Mathf.DeltaAngle(
+                    initialEulerAngle.x,
+                    currentEulerAngle.x
+                )
+            );
 
-        float differenceY = Mathf.Abs(
-            Mathf.DeltaAngle(
-                initialEulerAngle.y,
-                currentEulerAngle.y
-            )
-        );
+        float differenceY =
+            Mathf.Abs(
+                Mathf.DeltaAngle(
+                    initialEulerAngle.y,
+                    currentEulerAngle.y
+                )
+            );
 
-        float differenceZ = Mathf.Abs(
-            Mathf.DeltaAngle(
-                initialEulerAngle.z,
-                currentEulerAngle.z
-            )
-        );
+        float differenceZ =
+            Mathf.Abs(
+                Mathf.DeltaAngle(
+                    initialEulerAngle.z,
+                    currentEulerAngle.z
+                )
+            );
 
         /*
          * 同じ水平値を全シーンで使うと、
@@ -328,7 +365,8 @@ public class StartSceneManager : MonoBehaviour
                 waitForNeutralAfterSceneLoad = false;
 
                 Debug.Log(
-                    "水平付近へ戻ったため、センサー入力を有効にしました。"
+                    "水平付近へ戻ったため、" +
+                    "センサー入力を有効にしました。"
                 );
             }
 
@@ -356,8 +394,11 @@ public class StartSceneManager : MonoBehaviour
     }
 
     /// <summary>
-    /// DataManagerに水平姿勢がなければ、約1秒待って一度だけ保存する。
-    /// すでに保存済みなら、保存済みの水平姿勢をそのまま使用する。
+    /// DataManagerに水平姿勢がなければ、
+    /// 約1秒待って一度だけ保存する。
+    ///
+    /// すでに保存済みなら、
+    /// 保存済みの水平姿勢をそのまま使用する。
     /// </summary>
     private bool EnsureInitialEulerAngle(
         Vector3 currentEulerAngle
@@ -368,6 +409,9 @@ public class StartSceneManager : MonoBehaviour
             return true;
         }
 
+        /*
+         * 最初に有効なセンサデータを取得した時刻を保存する。
+         */
         if (firstValidSensorDataTime < 0.0f)
         {
             firstValidSensorDataTime =
@@ -380,11 +424,18 @@ public class StartSceneManager : MonoBehaviour
             Time.unscaledTime -
             firstValidSensorDataTime;
 
+        /*
+         * センサ値が安定するまで待機する。
+         */
         if (elapsed < calibrationDelaySeconds)
         {
             return false;
         }
 
+        /*
+         * 最初の1回だけ、
+         * 現在の姿勢を水平姿勢としてDataManagerへ保存する。
+         */
         bool saved =
             DataManager.TrySetInitialEulerSensorValue(
                 currentEulerAngle
@@ -520,44 +571,115 @@ public class StartSceneManager : MonoBehaviour
                  column < MatrixSize;
                  column++)
             {
-                startLedData[row, column] = 0;
+                startLedData[
+                    row,
+                    column
+                ] = 0;
             }
         }
     }
 
     /// <summary>
-    /// シリアルポートが開くまで待ってLEDデータを送信する
+    /// 「傾けてね」を必要な期間、繰り返し送信する。
+    ///
+    /// 水平姿勢が未取得の場合：
+    /// 水平を取得するまで送信し、
+    /// 取得後も指定秒数だけ送信する。
+    ///
+    /// 水平姿勢が取得済みの場合：
+    /// StartScene開始後、指定秒数だけ送信する。
     /// </summary>
     private IEnumerator SendStartLedMessageCoroutine()
     {
-        yield return new WaitForSecondsRealtime(
-            ledFirstSendDelaySeconds
-        );
-
+        /*
+         * 待機せず、最初のフレームから送信を始める。
+         *
+         * シリアルポートがまだ開いていない場合は
+         * SendStartLedMessage()がfalseを返すが、
+         * 次のループで再試行する。
+         */
         while (!isChangingScene)
         {
-            bool sendSucceeded =
-                SendStartLedMessage();
-
             /*
-             * 繰り返し送信が無効で、
-             * 送信に成功したら終了する。
-             *
-             * 送信に失敗した場合は一定時間後に再試行する。
+             * 成否に関係なく、
+             * 指定間隔で繰り返し送信する。
              */
-            if (sendSucceeded &&
-                !repeatLedTransmission)
+            SendStartLedMessage();
+
+            float currentTime =
+                Time.unscaledTime;
+
+            if (hadInitialCalibrationAtSceneStart)
             {
-                yield break;
+                /*
+                 * すでに水平取得済みの場合は、
+                 * StartScene開始から指定時間だけ送信する。
+                 */
+                float elapsedFromSceneStart =
+                    currentTime -
+                    sceneStartedAtUnscaledTime;
+
+                if (elapsedFromSceneStart >=
+                    ledSendDurationWhenAlreadyCalibratedSeconds)
+                {
+                    ledSendCoroutine = null;
+
+                    Debug.Log(
+                        "水平姿勢は取得済みだったため、" +
+                        "開始後のLED連続送信を終了しました。"
+                    );
+
+                    yield break;
+                }
+            }
+            else if (DataManager.HasInitialEulerSensorValue())
+            {
+                /*
+                 * このStartScene内で水平姿勢を取得した場合、
+                 * 取得完了を検出した時刻を一度だけ保存する。
+                 */
+                if (calibrationCompletedAtUnscaledTime < 0.0f)
+                {
+                    calibrationCompletedAtUnscaledTime =
+                        currentTime;
+
+                    Debug.Log(
+                        "水平姿勢の取得を確認しました。" +
+                        $"あと{ledContinueAfterCalibrationSeconds:F1}秒、" +
+                        "「傾けてね」を送信します。"
+                    );
+                }
+
+                float elapsedAfterCalibration =
+                    currentTime -
+                    calibrationCompletedAtUnscaledTime;
+
+                /*
+                 * 水平取得後、指定時間が経過したら
+                 * LEDデータの送信を終了する。
+                 */
+                if (elapsedAfterCalibration >=
+                    ledContinueAfterCalibrationSeconds)
+                {
+                    ledSendCoroutine = null;
+
+                    Debug.Log(
+                        "水平取得後のLED連続送信を終了しました。"
+                    );
+
+                    yield break;
+                }
             }
 
             yield return new WaitForSecondsRealtime(
                 Mathf.Max(
-                    0.1f,
-                    ledSendIntervalSeconds
+                    0.05f,
+                    ledContinuousSendIntervalSeconds
                 )
             );
         }
+
+        ledSendCoroutine = null;
     }
 
     /// <summary>
@@ -666,6 +788,9 @@ public class StartSceneManager : MonoBehaviour
 
         isChangingScene = true;
 
+        /*
+         * シーン遷移前にLED送信コルーチンを停止する。
+         */
         if (ledSendCoroutine != null)
         {
             StopCoroutine(ledSendCoroutine);

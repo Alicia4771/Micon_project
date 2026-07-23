@@ -5,28 +5,53 @@ using TMPro;
 public class GameManager : MonoBehaviour
 {
     [Header("Communication")]
+
     [SerializeField]
     private SensorReceiver sensorReceiver;
 
     [SerializeField]
     private radar radar;
 
+
+    //==================================================
+    // Radar send
+    //==================================================
+
     [Header("Radar Send Settings")]
-    [SerializeField, Min(0.01f),
-     Tooltip("レーダー情報をArduinoへ送信する間隔（秒）")]
+
+    [SerializeField, Min(0.01f)]
+    [Tooltip("レーダー情報をArduinoへ送信する間隔（秒）")]
     private float radar_send_interval = 1f;
 
     private float radar_send_time_count = 0f;
 
+
+    //==================================================
+    // Stone
+    //==================================================
+
     [Header("Stone Prefabs")]
+
     [SerializeField]
     private GameObject[] stonePrefabs;
 
+
+    //==================================================
+    // Score
+    //==================================================
+
     [Header("Score UI")]
+
     [SerializeField]
     private TextMeshProUGUI scoreText;
 
+
+    //==================================================
+    // Spawn timing
+    //==================================================
+
     [Header("Spawn Timing")]
+
     [SerializeField]
     private float spawn_timing_early = 6f;
 
@@ -39,7 +64,13 @@ public class GameManager : MonoBehaviour
     [SerializeField]
     private float spawn_timing_short_ratio = 0.85f;
 
+
+    //==================================================
+    // Spawn range
+    //==================================================
+
     [Header("Stone Spawn Range")]
+
     [SerializeField]
     private float spawn_range_x_min = -26f;
 
@@ -58,14 +89,26 @@ public class GameManager : MonoBehaviour
     [SerializeField]
     private float spawn_range_z_max = 250f;
 
+
+    //==================================================
+    // Time
+    //==================================================
+
     private float time_count = 0f;
 
     private float next_spawn_time = 0f;
+
     private float next_timing_update_time = 0f;
+
+
+    //==================================================
+    // Start
+    //==================================================
 
     private void Start()
     {
         time_count = 0f;
+
         radar_send_time_count = 0f;
 
         /*
@@ -80,6 +123,7 @@ public class GameManager : MonoBehaviour
         DataManager.Initialize();
 
         SpawnStone();
+
         ScheduleNextSpawn();
 
         next_timing_update_time =
@@ -90,7 +134,8 @@ public class GameManager : MonoBehaviour
         if (sensorReceiver == null)
         {
             Debug.LogWarning(
-                "GameManagerのSensor Receiverが設定されていません。",
+                "GameManagerのSensor Receiverが" +
+                "設定されていません。",
                 this
             );
         }
@@ -98,22 +143,31 @@ public class GameManager : MonoBehaviour
         if (radar == null)
         {
             Debug.LogWarning(
-                "GameManagerのRadarが設定されていません。",
+                "GameManagerのRadarが" +
+                "設定されていません。",
                 this
             );
         }
     }
 
+
+    //==================================================
+    // Update
+    //==================================================
+
     private void Update()
     {
-        time_count += Time.deltaTime;
+        time_count +=
+            Time.deltaTime;
 
         /*
          * 一定時間ごとに、
          * 岩の生成間隔を短くする。
          */
-        if (time_count >=
-            next_timing_update_time)
+        if (
+            time_count >=
+            next_timing_update_time
+        )
         {
             ShortenSpawnTiming();
 
@@ -122,27 +176,28 @@ public class GameManager : MonoBehaviour
         }
 
         /*
-         * 次の生成時刻になったら岩を生成する。
+         * 次の生成時刻になったら
+         * 岩を生成する。
          */
         if (time_count >= next_spawn_time)
         {
             SpawnStone();
+
             ScheduleNextSpawn();
         }
 
         /*
-         * シリアル通信で受信した
-         * センサーデータをDataManagerへ保存する。
+         * 新しい正常なセンサーデータが
+         * 届いたときだけDataManagerへ保存する。
+         *
+         * 7個や8個の破損したデータは、
+         * SensorReceiver側で破棄される。
          */
-        if (sensorReceiver != null)
-        {
-            DataManager.SetSensorValue(
-                sensorReceiver.GetSensorData()
-            );
-        }
+        ReceiveSensorData();
 
         /*
-         * 現在の仕様では毎フレーム1点加算する。
+         * 現在の仕様では
+         * 毎フレーム1点加算する。
          */
         DataManager.AddScore(1);
 
@@ -154,10 +209,12 @@ public class GameManager : MonoBehaviour
 
         /*
          * Inspectorで設定した秒数ごとに、
-         * レーダー情報を更新して送信する。
+         * レーダー情報をArduinoへ送信する。
          */
-        if (radar_send_time_count >=
-            radar_send_interval)
+        if (
+            radar_send_time_count >=
+            radar_send_interval
+        )
         {
             /*
              * 0へ戻すのではなく間隔分を引くことで、
@@ -172,15 +229,62 @@ public class GameManager : MonoBehaviour
         UpdateScoreText();
     }
 
+
+    //==================================================
+    // Sensor receive
+    //==================================================
+
     /// <summary>
-    /// レーダー情報と接近情報をArduinoへ送信する
+    /// 新しく受信した正常なセンサーデータを
+    /// DataManagerへ保存する
+    /// </summary>
+    private void ReceiveSensorData()
+    {
+        if (sensorReceiver == null)
+        {
+            return;
+        }
+
+        /*
+         * 前回の取得後に、
+         * 新しい正常なデータを受信した場合だけ
+         * trueになる。
+         */
+        bool hasNewData =
+            sensorReceiver.TryGetSensorData(
+                out string receivedSensorData
+            );
+
+        if (!hasNewData)
+        {
+            return;
+        }
+
+        /*
+         * SensorReceiver側ですでに、
+         * 個数と数値形式を確認済み。
+         */
+        DataManager.SetSensorValue(
+            receivedSensorData
+        );
+    }
+
+
+    //==================================================
+    // Radar send
+    //==================================================
+
+    /// <summary>
+    /// レーダー情報と接近情報を
+    /// Arduinoへ送信する
     /// </summary>
     private void SendRadarData()
     {
         if (radar == null)
         {
             Debug.LogWarning(
-                "GameManagerのRadarが設定されていません。",
+                "GameManagerのRadarが" +
+                "設定されていません。",
                 this
             );
 
@@ -190,7 +294,8 @@ public class GameManager : MonoBehaviour
         if (sensorReceiver == null)
         {
             Debug.LogWarning(
-                "GameManagerのSensor Receiverが設定されていません。",
+                "GameManagerのSensor Receiverが" +
+                "設定されていません。",
                 this
             );
 
@@ -246,6 +351,10 @@ public class GameManager : MonoBehaviour
 
         /*
          * 改行付きでArduinoへ送信する。
+         *
+         * SensorReceiver内部のwriteLockObjにより、
+         * Unity側で複数の送信処理が同時に
+         * 実行されることを防いでいる。
          */
         bool sendResult =
             sensorReceiver.SendToArduino(
@@ -260,6 +369,11 @@ public class GameManager : MonoBehaviour
             );
         }
     }
+
+
+    //==================================================
+    // Score
+    //==================================================
 
     /// <summary>
     /// スコア表示を更新する
@@ -276,6 +390,11 @@ public class GameManager : MonoBehaviour
                 .GetScore()
                 .ToString();
     }
+
+
+    //==================================================
+    // Spawn timing
+    //==================================================
 
     /// <summary>
     /// 次に岩を生成する時刻を決定する
@@ -305,8 +424,10 @@ public class GameManager : MonoBehaviour
             );
 
         next_spawn_time =
-            time_count + randomTiming;
+            time_count +
+            randomTiming;
     }
+
 
     /// <summary>
     /// 岩の生成間隔を短縮する
@@ -334,13 +455,20 @@ public class GameManager : MonoBehaviour
         );
     }
 
+
+    //==================================================
+    // Stone spawn
+    //==================================================
+
     /// <summary>
     /// 岩をランダムな位置へ生成する
     /// </summary>
     private bool SpawnStone()
     {
-        if (stonePrefabs == null ||
-            stonePrefabs.Length == 0)
+        if (
+            stonePrefabs == null ||
+            stonePrefabs.Length == 0
+        )
         {
             Debug.LogWarning(
                 "岩のプレハブが設定されていません。",
@@ -420,6 +548,11 @@ public class GameManager : MonoBehaviour
 
         return true;
     }
+
+
+    //==================================================
+    // Scene
+    //==================================================
 
     /// <summary>
     /// リザルト画面へ移動する
